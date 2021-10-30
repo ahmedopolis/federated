@@ -23,7 +23,11 @@ build --spawn_strategy=local
 build --compilation_mode=opt
 
 # Enable fast C++ protocol buffers, 10x speedup over pure Python.
-build --define=use_fast_cpp_protos=true
+# TODO(b/99999): there is a problem with pybind11_protobuf, libprotobuf, and
+# tensorflow when linking dynamicly (e.g. for a pip package). We must turn
+# off fast_cpp_protos because it seems like we end up with multiple descriptor
+# pools with different reflection objects for the same descriptor.
+# build --define=use_fast_cpp_protos=true
 build --define=allow_oversize_protos=true
 
 # Processor native optimizations (depends on build host capabilities).
@@ -70,8 +74,15 @@ build:remote --project_id=tensorflow-federated
 # nothing in a bazelrc will default to a monolithic build. The following line
 # opts in to modular op registration support by default.
 build --define framework_shared_object=true
+build --copt=-DSHARED_TF_FRAMEWORK_OBJECT
 
 build --define=grpc_no_ares=true
+
+# pybind_abeil does not include a __init__.py, which breaks dependencies when
+# bazel produces an empty __init__.py and hides the symbols form the `.so`
+# python extension. We must ask bazel not to generate these and rely on
+# explicit __init__.py files.
+build --incompatible_default_to_explicit_init_py
 
 # See https://github.com/bazelbuild/bazel/issues/7362 for information on what
 # --incompatible_remove_legacy_whole_archive flag does.

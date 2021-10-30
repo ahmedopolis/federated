@@ -47,7 +47,7 @@ git_repository(
 
 git_repository(
     name = "org_tensorflow",
-    commit = "7059eeb4b55ba316d959e923e51be3403a2924a8",
+    commit = "3f878cff5b698b82eea85db2b60d65a2e320850e",
     patches = ["//third_party/tensorflow:internal_visibility.patch"],
     remote = "https://github.com/tensorflow/tensorflow.git",
 )
@@ -66,7 +66,7 @@ git_repository(
 
 git_repository(
     name = "pybind11_protobuf",
-    commit = "23b01b590021980cf5f0f5fd1c8d11696c22099d",
+    commit = "f20537c3285636716ed86a7ef96baa19a788c944",
     remote = "https://github.com/pybind/pybind11_protobuf.git",
 )
 
