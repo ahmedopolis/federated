@@ -22,6 +22,7 @@ py_library(
 py_library(
     name = "async_execution_context",
     srcs = ["async_execution_context.py"],
+    data = ["@pybind11_abseil//pybind11_abseil:status.so"],
     srcs_version = "PY3",
     deps = [
         "//tensorflow_federated/python/common_libs:py_typecheck",
@@ -37,10 +38,12 @@ py_library(
         "//tensorflow_federated/python/core/impl/executors:executor_value_base",
         "//tensorflow_federated/python/core/impl/executors:executors_errors",
         "//tensorflow_federated/python/core/impl/executors:ingestable_base",
+        "//tensorflow_federated/python/core/impl/executors:value_serialization",
         "//tensorflow_federated/python/core/impl/types:computation_types",
         "//tensorflow_federated/python/core/impl/types:type_conversions",
         "//tensorflow_federated/python/core/impl/types:typed_object",
-        "@org_tensorflow//tensorflow:tensorflow_py",
+        "//third_party/py/tensorflow:tensorflow_no_contrib",
+        "@absl_py//absl/logging",
     ],
 )
 

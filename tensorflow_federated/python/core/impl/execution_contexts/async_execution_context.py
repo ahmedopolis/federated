@@ -19,13 +19,16 @@
 """A context for execution based on an embedded executor instance."""
 
 import asyncio
+import concurrent
 import contextlib
-from typing import Any
-from typing import Callable
-from typing import Optional
+import pprint
+import textwrap
+from typing import Any, Callable, Optional
 
+from absl import logging
 import tensorflow as tf
 
+from pybind11_abseil import status as absl_status
 from tensorflow_federated.python.common_libs import py_typecheck
 from tensorflow_federated.python.common_libs import retrying
 from tensorflow_federated.python.common_libs import structure
@@ -39,6 +42,7 @@ from tensorflow_federated.python.core.impl.executors import executor_factory
 from tensorflow_federated.python.core.impl.executors import executor_value_base
 from tensorflow_federated.python.core.impl.executors import executors_errors
 from tensorflow_federated.python.core.impl.executors import ingestable_base
+from tensorflow_federated.python.core.impl.executors import value_serialization
 from tensorflow_federated.python.core.impl.types import computation_types
 from tensorflow_federated.python.core.impl.types import type_conversions
 from tensorflow_federated.python.core.impl.types import typed_object
@@ -299,3 +303,74 @@ class AsyncExecutionContext(SingleCardinalityAsyncContext):
 
         return await tracing.wrap_coroutine_in_current_trace_context(
             _invoke(executor, comp, arg, result_type))
+
+
+# TODO(b/193900393): Define a custom error in CPP and expose to python to
+# more easily localize and control retries.
+def _is_retryable_absl_status(exception):
+  return (isinstance(exception, absl_status.StatusNotOk) and
+          exception.status.code() in [absl_status.StatusCode.UNAVAILABLE])
+
+
+class AsyncSerializeAndExecuteCPPContext(SingleCardinalityAsyncContext):
+  """An async execution context delegating to CPP Executor bindings."""
+
+  def __init__(self, factory, compiler_fn, max_workers=None):
+    super().__init__()
+    self._factory = factory
+    self._compiler_pipeline = compiler_pipeline.CompilerPipeline(compiler_fn)
+    self._futures_executor_pool = concurrent.futures.ThreadPoolExecutor(
+        max_workers=max_workers)
+
+  async def ingest(self, val, type_spec):
+    return val
+
+  @retrying.retry(
+      retry_on_exception_filter=_is_retryable_absl_status,
+      wait_max_ms=300_000,  # 5 minutes.
+      wait_multiplier=2,
+  )
+  async def invoke(self, comp, arg):
+    if asyncio.iscoroutine(arg):
+      arg = await arg
+    compiled_comp = self._compiler_pipeline.compile(comp)
+    serialized_comp, _ = value_serialization.serialize_value(
+        compiled_comp, comp.type_signature)
+    cardinalities = cardinalities_utils.infer_cardinalities(
+        arg, comp.type_signature.parameter)
+
+    try:
+      async with self._reset_factory_on_error(self._executor_factory,
+                                              cardinalities) as executor:
+        fn = executor.create_value(serialized_comp)
+        if arg is not None:
+          try:
+            serialized_arg, _ = value_serialization.serialize_value(
+                arg, comp.type_signature.parameter)
+          except Exception as e:
+            raise TypeError(
+                f'Failed to serialize argument:\n{arg}\nas a value of type:\n'
+                f'{comp.type_signature.parameter}') from e
+          arg_value = executor.create_value(serialized_arg)
+          call = executor.create_call(fn.ref, arg_value.ref)
+        else:
+          call = executor.create_call(fn.ref, None)
+        # Delaying grabbing the event loop til now ensures that the call below
+        # is attached to the loop running the invoke.
+        running_loop = asyncio.get_running_loop()
+        result_pb = await running_loop.run_in_executor(
+            self._futures_executor_pool, lambda: executor.materialize(call.ref))
+    except absl_status.StatusNotOk:
+      indent = lambda s: textwrap.indent(s, prefix='\t')
+      if arg is None:
+        arg_str = 'without any arguments'
+      else:
+        arg_str = f'with argument:\n{indent(pprint.pformat(arg))}'
+      logging.error('Error invoking computation with signature:\n%s\n%s\n',
+                    indent(comp.type_signature.formatted_representation()),
+                    arg_str)
+      raise
+    result_value, _ = value_serialization.deserialize_value(
+        result_pb, comp.type_signature.result)
+    return type_conversions.type_to_py_container(result_value,
+                                                 comp.type_signature.result)

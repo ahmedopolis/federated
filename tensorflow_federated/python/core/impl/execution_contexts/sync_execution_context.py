@@ -64,3 +64,20 @@ class ExecutionContext(context_base.Context):
   def invoke(self, comp, arg):
     return self._event_loop.run_until_complete(
         self._async_context.invoke(comp, arg))
+
+
+class SyncSerializeAndExecuteCPPContext(context_base.Context):
+  """A synchronous execution context delegating to CPP Executor bindings."""
+
+  def __init__(self, factory, compiler_fn):
+    self._async_execution_context = async_execution_context.AsyncSerializeAndExecuteCPPContext(
+        factory, compiler_fn)
+    self._loop = asyncio.new_event_loop()
+
+  def ingest(self, val, type_spec):
+    return self._loop.run_until_complete(
+        self._async_execution_context.ingest(val, type_spec))
+
+  def invoke(self, comp, arg):
+    return self._loop.run_until_complete(
+        self._async_execution_context.invoke(comp, arg))

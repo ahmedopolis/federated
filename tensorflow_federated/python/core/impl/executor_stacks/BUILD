@@ -20,6 +20,35 @@ py_library(
 )
 
 py_library(
+    name = "cpp_executor_factory",
+    srcs = ["cpp_executor_factory.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":executor_stack_bindings",
+        "//tensorflow_federated/python/common_libs:py_typecheck",
+        "//tensorflow_federated/python/core/impl/executors:executor_bindings",
+        "//tensorflow_federated/python/core/impl/executors:executor_factory",
+        "//tensorflow_federated/python/core/impl/types:placements",
+        "//third_party/py/cachetools",
+    ],
+)
+
+py_test(
+    name = "cpp_executor_factory_test",
+    srcs = ["cpp_executor_factory_test.py"],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":cpp_executor_factory",
+        "//tensorflow_federated/python/core/impl/executors:executor_bindings",
+        "//tensorflow_federated/python/core/impl/executors:executor_factory",
+        "//tensorflow_federated/python/core/impl/types:placements",
+        "//third_party/pybind11_abseil:status",
+        "@absl_py//absl/testing:absltest",
+    ],
+)
+
+py_library(
     name = "executor_stack_bindings",
     srcs = ["executor_stack_bindings.py"],
     srcs_version = "PY3",
