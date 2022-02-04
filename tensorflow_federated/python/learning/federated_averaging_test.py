@@ -97,7 +97,6 @@ class FederatedAveragingClientTest(test_case.TestCase, parameterized.TestCase):
         np.linalg.norm(client_outputs.weights_delta, axis=-1), expected_norm)
     if weighted:
       self.assertEqual(client_outputs.weights_delta_weight, 8.0)
-    self.assertEqual(client_outputs.optimizer_output['num_examples'], 8)
     if use_metrics_aggregator:
       self.assertDictContainsSubset({'num_examples': 8},
                                     client_outputs.model_output)
